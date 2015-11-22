@@ -1,0 +1,145 @@
+---
+title: "Predictive Model For Human Activity Recognition"
+output: html_document
+---
+
+##Summary    
+The goal of your project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. You may use any of the other variables to predict with. You should create a report describing how you built your model, how you used cross validation, what you think the expected out of sample error is, and why you made the choices you did. You will also use your prediction model to predict 20 different test cases.
+
+
+```{r echo=FALSE}
+#NOTE:-
+#Use below command to render html to pdf
+#render("MotorTrendsBestMPGOption.Rmd", "pdf_document")
+#installed 'pandoc-1.15.2-windows.msi' and 'basic-miktex-2.9.5721-x64.exe' required for knit html 2 pdf conversion
+setwd("C:/Data/devtools/Git/PracticalMachineLearning_Project")
+library(knitr)
+library(rmarkdown)
+knitr::opts_chunk$set(fig.width=40, fig.height=20, fig.path='figs/', warning=FALSE, message=FALSE,echo = FALSE)
+set.seed(1232)
+```
+##Analysis
+###Data Processing  
+The data for this project come from this source: [http://groupware.les.inf.puc-rio.br/har](http://groupware.les.inf.puc-rio.br/har). If you use the document you create for this class for any purpose please cite them as they have been very generous in allowing their data to be used for this kind of assignment. 
+
+Downloading csv files for analysis   
+```{r loading data, echo=TRUE, cache=TRUE}
+#Downloading data
+if (!file.exists("./pml-training.csv")) {
+    download.file("http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", destfile = "./pml-training.csv")
+}
+if (!file.exists("./pml-testing.csv")) {
+    download.file("http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", destfile = "./pml-testing.csv")
+}
+```
+Reading data from csv files  
+```{r echo=TRUE}
+#Loading Training set
+training <- read.csv("pml-training.csv", na.strings = c("NA", ""))
+#Final Test set
+final_test <- read.csv("pml-testing.csv", na.strings = c("NA", ""))
+```
+
+```{r echo=TRUE}
+dim(training)
+```
+###Data Cleaning  
+Removing unnecessary columns X, user_name, and cvtd_timestamp (factor instead of numeric) from data frame.  
+```{r updating columns, echo=TRUE}
+training <- training[, -grep("X|user_name|cvtd_timestamp", names(training))]
+```
+
+Training data frame has some near zero variance columns. Removing those columns from data frame since they will not contributed to the model.  
+
+```{r nearZeroVariance, echo=TRUE}
+suppressMessages(library(caret))
+nearZero <- nearZeroVar(training)
+```
+(`r as.numeric(length(nearZero))`) nearZero variance columns has been remove. Now we will remove NA columns as well from the data frame.  
+```{r finalDataframe, echo=TRUE}
+#Removing non zero variance elements from data frame
+training <- training[,-nearZero]
+#Removing NA data elements ('2' for columns) from data froma
+nacols <- apply(training, 2, function(x) {sum(is.na(x))})
+training <- training[, which(nacols == 0)]
+dim(training)
+```
+Final data frame (training) has **`r formatC(nrow(training),digits=0,format="f")`**  rows and **`r as.numeric(ncol(training))`** columns. Which is less when compared to original data frame (when loaded from csv).  
+
+###Test data preparation  
+Creating training and test data sets from data frame, in which 80% of training and 20% of test data for further processing.  
+
+```{r testdata, echo=TRUE}
+inTrain <- createDataPartition(y = training$classe, p = 0.8, list = FALSE)
+training2 <- training[inTrain, ] 
+test2 <- training[-inTrain, ]
+```
+
+##Model Creation
+
+Creating a model on training2 and test2 data sets. Firt attempt w'll try fitting a single tree model with rpart.  
+```{r firstFit, echo=TRUE}
+library(rpart)
+fit <- train(training2$classe ~ ., data = training2, method = "rpart")
+fit
+```
+This model accuracy is **55.95%**, which is low.  
+
+####Random forests
+We will create a model with Random forests to get better accuracy.  
+
+```{r randomForests, echo=TRUE}
+suppressMessages(library(randomForest))
+tctrl <- trainControl(method = "cv", number = 4, allowParallel = TRUE)
+fit2 <- train(training2$classe ~ ., data = training2, method = "rf", prof = TRUE, trControl = tctrl)
+fit2
+```
+Random forests provided a model with a high accurecy **99.84%**.
+
+##Cross-Validation  
+We will proceed with fit2 to predict the new values from test2 set created earlier for cross-validation.  
+```{r rediction, echo=TRUE}
+pred <- predict(fit2, test2)
+test2$predRight <- pred ==test2$classe
+table(pred, test2$classe)
+```
+Predictions are not correct in all cases as expected. Caluclating accuracy:  
+```{r accuracyCalc, echo=TRUE}
+postRes <- postResample(pred, test2$classe)
+postRes
+```
+Prediction fitted for test set higher than training set (i.e 99.84%).  
+
+###Sample error  
+We calculate the expected out of sample error from test set (test2) that we created for cross-validation.  
+
+```{r expectedoose, echo=TRUE}
+cfmtrx <- confusionMatrix(pred, test2$classe)
+cfmtrx
+```
+The expected out of sample error is 0.16%.
+
+### Test set predictions
+
+```{r testPredictions, echo=TRUE}
+testpred <- predict(fit2, final_test)#test data from csv file
+test3 <- final_test
+test3$classe <- testpred
+#function to write answer to a file
+pml_write_files = function(x) {
+    n = length(x)
+    for (i in 1:n) {
+         #file name
+        filename = paste0("problem_id_", i, ".txt")
+        write.table(x[i], file = filename, quote = FALSE, row.names = FALSE, 
+            col.names = FALSE)
+    }
+}
+
+answers <- test3$classe
+#writing answers to files
+pml_write_files(answers)
+answers
+```
+
+
