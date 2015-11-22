@@ -218,7 +218,6 @@ cfmtrx
 ## Detection Prevalence   0.2850   0.1927   0.1749   0.1637   0.1838
 ## Balanced Accuracy      0.9996   0.9980   0.9997   0.9992   1.0000
 ```
-The expected out of sample error is 0.16%.
 
 ### Test set predictions
 

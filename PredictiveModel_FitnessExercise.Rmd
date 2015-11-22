@@ -117,7 +117,6 @@ We calculate the expected out of sample error from test set (test2) that we crea
 cfmtrx <- confusionMatrix(pred, test2$classe)
 cfmtrx
 ```
-The expected out of sample error is 0.16%.
 
 ### Test set predictions
 
